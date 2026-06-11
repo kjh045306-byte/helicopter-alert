@@ -5,7 +5,7 @@ import { saveCurrentPosition, saveTrackingPoint, clearTrackingPath } from '../se
 import { useStore } from '../store.js'
 
 const GPS_SIGNAL_TIMEOUT_MS = 10_000
-const TRACKING_INTERVAL_MS  = 10_000
+const TRACKING_INTERVAL_MS  = 7_000
 
 export function useGPS() {
   const setGpsPosition   = useStore((s) => s.setGpsPosition)
