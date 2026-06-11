@@ -4,12 +4,14 @@ import { useGPS } from '../hooks/useGPS.js'
 import FlightStatus from './FlightStatus.jsx'
 import EventLog from './EventLog.jsx'
 import NotificationPanel from './NotificationPanel.jsx'
+import TrackingMap from './TrackingMap.jsx'
 import GpsDebugBar from './GpsDebugBar.jsx'
 import { reverseGeocode } from '../utils/geocode.js'
 import { sendTelegramMessage, buildLocationMessage } from '../services/telegramService.js'
 
 const TABS = [
   { id: 'status', label: '상태',    icon: '📡' },
+  { id: 'map',    label: '지도',    icon: '🗺' },
   { id: 'log',    label: '이벤트',  icon: '📋' },
   { id: 'notify', label: '알림설정', icon: '🔔' },
 ]
@@ -24,16 +26,14 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col min-h-dvh max-w-md mx-auto">
-      {/* 헤더 */}
       <header className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-2xl">🚁</span>
           <div>
             <h1 className="font-bold text-sm leading-tight">헬리콥터 이착륙 알림</h1>
-            <p className="text-xs text-slate-500">HeliAlert v0.7</p>
+            <p className="text-xs text-slate-500">HeliAlert v0.8</p>
           </div>
         </div>
-
         {isPilot && (
           <button
             onClick={gpsActive ? stopGPS : startGPS}
@@ -44,13 +44,9 @@ export default function Dashboard() {
         )}
       </header>
 
-      {/* GPS 상태 바 */}
       <GpsDebugBar />
-
-      {/* 오프라인 배너 */}
       <OfflineBanner />
 
-      {/* 탭 바 */}
       <nav className="bg-slate-900 border-b border-slate-800 flex">
         {TABS.map((t) => (
           <button
@@ -67,7 +63,6 @@ export default function Dashboard() {
         ))}
       </nav>
 
-      {/* 컨텐츠 */}
       <main className="flex-1 overflow-y-auto p-4 space-y-4 pb-8">
         {tab === 'status' && (
           <>
@@ -87,6 +82,7 @@ export default function Dashboard() {
             {isPilot && gpsActive && <StopGpsCard onStop={stopGPS} />}
           </>
         )}
+        {tab === 'map'    && <TrackingMap />}
         {tab === 'log'    && <EventLog />}
         {tab === 'notify' && <NotificationPanel />}
       </main>
@@ -108,14 +104,12 @@ function LocationCheckCard() {
     try {
       const placeName = await reverseGeocode(gpsPosition.lat, gpsPosition.lon)
         .catch(() => `위도 ${gpsPosition.lat.toFixed(4)} 경도 ${gpsPosition.lon.toFixed(4)}`)
-
       const event = {
         timestamp: Date.now(),
         lat:       gpsPosition.lat,
         lon:       gpsPosition.lon,
         placeName,
       }
-
       let ok = false
       if (notifyTelegram) {
         ok = await sendTelegramMessage(buildLocationMessage(event))
@@ -148,15 +142,9 @@ function LocationCheckCard() {
       {!gpsSignalLost && !gpsPosition && (
         <p className="text-xs text-slate-600 text-center">GPS 위치 수신 대기 중...</p>
       )}
-      {state === 'sending' && (
-        <p className="text-xs text-slate-400 text-center">위치 정보 전송 중...</p>
-      )}
-      {state === 'done' && (
-        <p className="text-xs text-green-400 text-center">✓ 위치 알림 발송 완료</p>
-      )}
-      {state === 'fail' && (
-        <p className="text-xs text-red-400 text-center">발송 실패 — 통신 상태를 확인하세요</p>
-      )}
+      {state === 'sending' && <p className="text-xs text-slate-400 text-center">위치 정보 전송 중...</p>}
+      {state === 'done'    && <p className="text-xs text-green-400 text-center">✓ 위치 알림 발송 완료</p>}
+      {state === 'fail'    && <p className="text-xs text-red-400 text-center">발송 실패 — 통신 상태를 확인하세요</p>}
     </div>
   )
 }
@@ -181,7 +169,6 @@ function StopGpsCard({ onStop }) {
 
 function OfflineBanner() {
   const [online, setOnline] = useState(navigator.onLine)
-
   useEffect(() => {
     const onOnline  = () => setOnline(true)
     const onOffline = () => setOnline(false)
@@ -192,7 +179,6 @@ function OfflineBanner() {
       window.removeEventListener('offline', onOffline)
     }
   }, [])
-
   if (online) return null
   return (
     <div className="bg-red-900/70 text-red-300 text-xs px-4 py-2 flex items-center gap-2">
@@ -201,4 +187,3 @@ function OfflineBanner() {
     </div>
   )
 }
-

@@ -4,6 +4,7 @@ import {
   collection,
   addDoc,
   doc,
+  setDoc,
   deleteDoc,
   getDocs,
   query,
@@ -24,7 +25,6 @@ let auth
 let messaging
 let currentUid = null
 
-// ── 앱 초기화 ──────────────────────────────────────────────────
 export function initFirebase() {
   if (!firebaseConfig.apiKey) {
     console.warn('[Firebase] config/firebase.js 값이 비어있습니다.')
@@ -41,7 +41,6 @@ export function initFirebase() {
   }
 }
 
-// ── 익명 인증 — 앱 시작 시 한 번 호출 ──────────────────────────
 export async function initAuth() {
   if (!auth) return null
   try {
@@ -59,20 +58,15 @@ export function getDeviceId() {
   return currentUid
 }
 
-// 이벤트 컬렉션 참조 — users/{uid}/flight_events
 function eventsCol(uid) {
   return collection(db, 'users', uid, 'flight_events')
 }
 
-// ── 이벤트 저장 ────────────────────────────────────────────────
 export async function saveEvent(eventData) {
   if (!db || !currentUid) throw new Error('Firestore 미초기화 또는 미인증')
-
-  // 3일 후 만료 타임스탬프
   const expireAt = Timestamp.fromDate(
     new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
   )
-
   return addDoc(eventsCol(currentUid), {
     ...eventData,
     uid:       currentUid,
@@ -82,30 +76,22 @@ export async function saveEvent(eventData) {
   })
 }
 
-// ── 만료 이벤트 삭제 (앱 시작 시 호출) ──────────────────────────
 export async function deleteExpiredEvents() {
   if (!db || !currentUid) return
-
   const now  = Timestamp.now()
   const snap = await getDocs(
     query(eventsCol(currentUid), where('expireAt', '<', now))
   )
-
   await Promise.all(
     snap.docs.map((d) =>
       deleteDoc(doc(db, 'users', currentUid, 'flight_events', d.id))
     )
   )
-
-  if (snap.size > 0) {
-    console.log(`[Cleanup] 만료 이벤트 ${snap.size}건 삭제`)
-  }
+  if (snap.size > 0) console.log(`[Cleanup] 만료 이벤트 ${snap.size}건 삭제`)
 }
 
-// ── 실시간 이벤트 구독 ─────────────────────────────────────────
 export function subscribeRecentEvents(callback, count = 50) {
   if (!db || !currentUid) return () => {}
-
   const q = query(
     eventsCol(currentUid),
     orderBy('createdAt', 'desc'),
@@ -116,7 +102,74 @@ export function subscribeRecentEvents(callback, count = 50) {
   )
 }
 
-// ── FCM 토큰 등록 ──────────────────────────────────────────────
+// ── 실시간 위치 추적 ──────────────────────────────────────────
+
+// 현재 위치 저장 (덮어쓰기)
+export async function saveCurrentPosition(position) {
+  if (!db || !currentUid) return
+  try {
+    await setDoc(doc(db, 'tracking', 'position'), {
+      lat:       position.lat,
+      lon:       position.lon,
+      speedKmh:  position.speedKmh,
+      accuracy:  position.accuracy,
+      uid:       currentUid,
+      updatedAt: serverTimestamp(),
+    })
+  } catch (e) {
+    console.warn('[Tracking] 위치 저장 실패:', e.message)
+  }
+}
+
+// 경로 포인트 추가
+export async function saveTrackingPoint(position) {
+  if (!db || !currentUid) return
+  try {
+    await addDoc(collection(db, 'tracking', 'current', 'path'), {
+      lat:       position.lat,
+      lon:       position.lon,
+      speedKmh:  position.speedKmh,
+      uid:       currentUid,
+      createdAt: serverTimestamp(),
+    })
+  } catch (e) {
+    console.warn('[Tracking] 경로 저장 실패:', e.message)
+  }
+}
+
+// 이전 경로 전체 삭제 (감지 시작 시 호출)
+export async function clearTrackingPath() {
+  if (!db) return
+  try {
+    const snap = await getDocs(collection(db, 'tracking', 'current', 'path'))
+    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)))
+    console.log(`[Tracking] 이전 경로 ${snap.size}건 삭제`)
+  } catch (e) {
+    console.warn('[Tracking] 경로 삭제 실패:', e.message)
+  }
+}
+
+// 현재 위치 실시간 구독
+export function subscribePosition(callback) {
+  if (!db) return () => {}
+  return onSnapshot(doc(db, 'tracking', 'position'), (snap) => {
+    if (snap.exists()) callback(snap.data())
+    else callback(null)
+  })
+}
+
+// 경로 실시간 구독
+export function subscribePath(callback) {
+  if (!db) return () => {}
+  const q = query(
+    collection(db, 'tracking', 'current', 'path'),
+    orderBy('createdAt', 'asc')
+  )
+  return onSnapshot(q, (snap) =>
+    callback(snap.docs.map((d) => d.data()))
+  )
+}
+
 export async function registerFCMToken(role) {
   if (!app) return null
   try {
@@ -137,7 +190,6 @@ export async function registerFCMToken(role) {
   }
 }
 
-// ── 포어그라운드 FCM 수신 ───────────────────────────────────────
 export function onForegroundMessage(callback) {
   if (!messaging) return () => {}
   return onMessage(messaging, callback)

@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { gpsService } from '../services/gpsService.js'
 import { flightMachine } from '../services/stateMachine.js'
+import { saveCurrentPosition, saveTrackingPoint, clearTrackingPath } from '../services/firebaseService.js'
 import { useStore } from '../store.js'
 
 const GPS_SIGNAL_TIMEOUT_MS = 10_000
+const TRACKING_INTERVAL_MS  = 10_000
 
 export function useGPS() {
   const setGpsPosition   = useStore((s) => s.setGpsPosition)
@@ -12,11 +14,11 @@ export function useGPS() {
   const setGpsSignalLost = useStore((s) => s.setGpsSignalLost)
   const rafRef           = useRef(null)
   const wakeLockRef      = useRef(null)
-  const lastGpsRef       = useRef(null)   // Date.now() of last valid GPS fix
+  const lastGpsRef       = useRef(null)
   const isActiveRef      = useRef(false)
+  const trackingTimerRef = useRef(null)
 
   useEffect(() => {
-    // GPS 구독
     const unsubGPS = gpsService.subscribe((pos) => {
       if (pos) {
         lastGpsRef.current = Date.now()
@@ -27,7 +29,6 @@ export function useGPS() {
       }
     })
 
-    // GPS 타임아웃 감시 (10초 갱신 없으면 경고 + 상태 머신 리셋)
     const signalCheckInterval = setInterval(() => {
       if (!isActiveRef.current || lastGpsRef.current === null) return
       const elapsed = Date.now() - lastGpsRef.current
@@ -38,7 +39,6 @@ export function useGPS() {
       }
     }, 1_000)
 
-    // 홀드 프로그레스 애니메이션 루프
     const setHoldProgress = useStore.getState().setHoldProgress
     function animLoop() {
       setHoldProgress(flightMachine.holdProgress)
@@ -46,12 +46,10 @@ export function useGPS() {
     }
     rafRef.current = requestAnimationFrame(animLoop)
 
-    // 화면 복귀 감지 — GPS 스트림 재시작 + 고착 방지
     function handleVisibility() {
       if (document.visibilityState !== 'visible' || !isActiveRef.current) return
       gpsService.stop()
       gpsService.start()
-      // 마지막 갱신이 10초 이상 지났으면 상태 머신 리셋
       if (lastGpsRef.current !== null && Date.now() - lastGpsRef.current >= GPS_SIGNAL_TIMEOUT_MS) {
         setGpsSignalLost(true)
         setGpsError('GPS 신호 끊김')
@@ -76,7 +74,19 @@ export function useGPS() {
       setGpsError('Geolocation API를 사용할 수 없습니다')
       return
     }
-    // Wake Lock 획득 (화면 꺼짐 방지)
+
+    // 이전 경로 삭제 후 추적 시작
+    await clearTrackingPath()
+
+    // 10초마다 위치 저장
+    trackingTimerRef.current = setInterval(() => {
+      const pos = gpsService.lastPosition
+      if (pos && isActiveRef.current) {
+        saveCurrentPosition(pos)
+        saveTrackingPoint(pos)
+      }
+    }, TRACKING_INTERVAL_MS)
+
     if ('wakeLock' in navigator) {
       try {
         wakeLockRef.current = await navigator.wakeLock.request('screen')
@@ -91,7 +101,13 @@ export function useGPS() {
     setGpsActive(false)
     isActiveRef.current = false
     lastGpsRef.current  = null
-    // Wake Lock 해제
+
+    // 추적 타이머 중지
+    if (trackingTimerRef.current) {
+      clearInterval(trackingTimerRef.current)
+      trackingTimerRef.current = null
+    }
+
     if (wakeLockRef.current) {
       wakeLockRef.current.release().catch(() => {})
       wakeLockRef.current = null
