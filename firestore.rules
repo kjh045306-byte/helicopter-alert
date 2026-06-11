@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 사용자별 이착륙 이벤트 ────────────────────────────────
+    // 경로: users/{uid}/flight_events/{docId}
+    // • 읽기·생성: 익명 인증된 본인만
+    // • 수정: 불가 (이벤트는 불변)
+    // • 삭제: 본인 + 만료(expireAt < 현재 시각)된 문서만
+    match /users/{uid}/flight_events/{docId} {
+      allow read, create: if request.auth != null
+                          && request.auth.uid == uid;
+
+      allow update: if false;
+
+      allow delete: if request.auth != null
+                    && request.auth.uid == uid
+                    && resource.data.expireAt < request.time;
+    }
+
+    // ── FCM 토큰 ─────────────────────────────────────────────
+    // 인증된 사용자만 등록 가능, 외부 읽기 완전 차단
+    match /fcm_tokens/{docId} {
+      allow read:   if false;
+      allow create: if request.auth != null;
+      allow update: if false;
+      allow delete: if request.auth != null
+                    && resource.data.uid == request.auth.uid;
+    }
+  }
+}

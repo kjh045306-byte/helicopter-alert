@@ -1,0 +1,25 @@
+{
+  "name": "헬리콥터 이착륙 알림",
+  "short_name": "HeliAlert",
+  "description": "헬리콥터 이착륙 자동 감지 및 알림 시스템",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "orientation": "portrait",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "/helicopter.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/helicopter.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

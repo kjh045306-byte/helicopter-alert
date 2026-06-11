@@ -1,0 +1,14 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "flight_events",
+      "fieldPath": "expireAt",
+      "indexes": [
+        { "queryScope": "COLLECTION",       "order": "ASCENDING"  },
+        { "queryScope": "COLLECTION",       "order": "DESCENDING" },
+        { "queryScope": "COLLECTION_GROUP", "order": "ASCENDING"  }
+      ]
+    }
+  ]
+}
