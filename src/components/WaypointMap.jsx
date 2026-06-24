@@ -39,6 +39,8 @@ export default function WaypointMap({ initialPos, onConfirm, onClose, title }) {
       zoom: 13,
       mapTypeId: 'hybrid',
       mapTypeControl: false,
+      gestureHandling: 'greedy',
+      scrollwheel: true,
       streetViewControl: false,
       fullscreenControl: false,
     })

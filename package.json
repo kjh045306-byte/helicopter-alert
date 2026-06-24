@@ -1,7 +1,7 @@
 {
   "name": "helicopter-alert",
   "private": true,
-  "version": "0.5.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

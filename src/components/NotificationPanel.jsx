@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store.js'
+
+const MARKER_COLORS = ['#FF7A00', '#FFD400', '#1d4ed8', '#38BDF8']
 import { sendTelegramMessage, buildTelegramMessage } from '../services/telegramService.js'
 import { reverseGeocode } from '../utils/geocode.js'
 import { getQueue } from '../utils/offlineQueue.js'
@@ -63,6 +65,8 @@ export default function NotificationPanel() {
   const flightPoints      = useStore((s) => s.flightPoints)
   const setFlightPoints   = useStore((s) => s.setFlightPoints)
   const clearFlightPoints = useStore((s) => s.clearFlightPoints)
+  const markerColor       = useStore((s) => s.markerColor)
+  const setMarkerColor    = useStore((s) => s.setMarkerColor)
 
   const [testState, setTestState] = useState(null)
   const [mapTarget, setMapTarget] = useState(null)
@@ -148,6 +152,27 @@ export default function NotificationPanel() {
 
       {/* 감지 설정값 — Dashboard에서 이동 */}
       <SettingsInfo />
+
+      {/* 지도 마커 색상 */}
+      <div className="card space-y-2">
+        <h3 className="text-sm font-semibold text-slate-400">지도 마커 색상</h3>
+        <div className="grid grid-cols-4 gap-2">
+          {MARKER_COLORS.map((hex) => (
+            <button
+              key={hex}
+              onClick={() => setMarkerColor(hex)}
+              className={`flex items-center justify-center py-2 rounded-xl border transition-all
+                ${markerColor === hex ? 'border-blue-400 bg-slate-700/50' : 'border-slate-700'}`}
+            >
+              <svg width="28" height="28" viewBox="0 0 48 48">
+                <circle cx="24" cy="24" r="22" fill={hex} stroke={hex} strokeWidth="2" />
+                <circle cx="24" cy="24" r="14" fill="#ffffff" />
+                <text x="24" y="32" textAnchor="middle" fontSize="20">🚁</text>
+              </svg>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* 운항 지점 설정 */}
       <div className="card space-y-3">
@@ -258,8 +283,6 @@ export default function NotificationPanel() {
           </>
         )}
       </div>
-
-      <p className="text-xs text-slate-600 text-center">FCM 푸시 알림은 추후 업데이트 예정입니다</p>
 
       {offlineQ.length > 0 && (
         <div className="card border-amber-700 bg-amber-900/20">

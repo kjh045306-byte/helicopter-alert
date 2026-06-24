@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useStore } from '../store.js'
 import { subscribePosition, subscribePath } from '../services/firebaseService.js'
 
 const GOOGLE_MAPS_KEY = 'AIzaSyAi9KTkybz2bDXoZbbHWHzMpzylOL6N_dg'
@@ -23,6 +24,8 @@ export default function TrackingMap() {
   const polylineRef = useRef(null)
   const googleReady = useGoogleMaps()
 
+  const markerColor = useStore((s) => s.markerColor)
+
   const [position,    setPosition]    = useState(null)
   const [path,        setPath]        = useState([])
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -36,6 +39,18 @@ export default function TrackingMap() {
     const unsubPath = subscribePath((pts) => setPath(pts))
     return () => { unsubPos(); unsubPath() }
   }, [])
+
+  const heliIcon = googleReady ? {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+      <circle cx="24" cy="24" r="22" fill="${markerColor}" stroke="${markerColor}" stroke-width="2"/>
+      <circle cx="24" cy="24" r="14" fill="#ffffff"/>
+      <text x="24" y="32" text-anchor="middle" font-size="20">🚁</text>
+    </svg>
+  `),
+    scaledSize: new window.google.maps.Size(29, 29),
+    anchor:     new window.google.maps.Point(14, 14),
+  } : null
 
   // 지도 초기화
   useEffect(() => {
@@ -58,17 +73,6 @@ export default function TrackingMap() {
     })
 
     // 헬기 마커
-    const heliIcon = {
-      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-      <circle cx="24" cy="24" r="22" fill="#1d4ed8" stroke="#93c5fd" stroke-width="2"/>
-      <text x="24" y="32" text-anchor="middle" font-size="24">🚁</text>
-    </svg>
-  `),
-      scaledSize: new window.google.maps.Size(48, 48),
-      anchor:     new window.google.maps.Point(24, 24),
-    }
-
     markerRef.current = new window.google.maps.Marker({
       map,
       visible: false,
@@ -79,7 +83,7 @@ export default function TrackingMap() {
     // 경로 선
     polylineRef.current = new window.google.maps.Polyline({
       map,
-      strokeColor:   '#3b82f6',
+      strokeColor:   markerColor,
       strokeOpacity: 0.8,
       strokeWeight:  3,
     })
@@ -93,8 +97,10 @@ export default function TrackingMap() {
     const latlng = { lat: position.lat, lng: position.lon }
     markerRef.current.setPosition(latlng)
     markerRef.current.setVisible(true)
+    markerRef.current.setIcon(heliIcon)
+    polylineRef.current?.setOptions({ strokeColor: markerColor })
     googleRef.current.panTo(latlng)
-  }, [position])
+  }, [position, markerColor])
 
   // 경로 업데이트 → 폴리라인 갱신
   useEffect(() => {

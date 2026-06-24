@@ -125,12 +125,16 @@ export async function saveCurrentPosition(position) {
 export async function saveTrackingPoint(position) {
   if (!db || !currentUid) return
   try {
+    const expireAt = Timestamp.fromDate(
+      new Date(Date.now() + 24 * 60 * 60 * 1000)
+    )
     await addDoc(collection(db, 'tracking', 'current', 'path'), {
       lat:       position.lat,
       lon:       position.lon,
       speedKmh:  position.speedKmh,
       uid:       currentUid,
       createdAt: serverTimestamp(),
+      expireAt,
     })
   } catch (e) {
     console.warn('[Tracking] 경로 저장 실패:', e.message)
@@ -163,7 +167,8 @@ export function subscribePath(callback) {
   if (!db) return () => {}
   const q = query(
     collection(db, 'tracking', 'current', 'path'),
-    orderBy('createdAt', 'asc')
+    where('expireAt', '>', Timestamp.now()),
+    orderBy('expireAt', 'asc')
   )
   return onSnapshot(q, (snap) =>
     callback(snap.docs.map((d) => d.data()))

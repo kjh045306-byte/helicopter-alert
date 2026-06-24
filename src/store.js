@@ -37,6 +37,7 @@ export const useStore = create((set) => ({
   // 알림 토글
   notifyFCM:      lsBool('heli_notify_fcm',     true),
   notifyTelegram: lsBool('heli_notify_telegram', true),
+  markerColor: localStorage.getItem('heli_marker_color') ?? '#1d4ed8',
 
   // 운항 지점 설정
   flightPoints: loadWaypoints(),
@@ -61,6 +62,10 @@ export const useStore = create((set) => ({
   setNotifyTelegram: (v) => {
     localStorage.setItem('heli_notify_telegram', v)
     set({ notifyTelegram: v })
+  },
+  setMarkerColor: (color) => {
+    localStorage.setItem('heli_marker_color', color)
+    set({ markerColor: color })
   },
 
   setFlightPoints: (points) => {
