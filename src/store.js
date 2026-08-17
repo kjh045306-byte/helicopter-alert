@@ -7,16 +7,6 @@ function lsBool(key, defaultVal) {
   return v === null ? defaultVal : v !== 'false'
 }
 
-function loadWaypoints() {
-  try {
-    const raw = localStorage.getItem('heli_waypoints')
-    if (!raw) return { takeoff: null, waypoints: [], landing: null, radiusKm: 1, expiresAt: null }
-    return JSON.parse(raw)
-  } catch {
-    return { takeoff: null, waypoints: [], landing: null, radiusKm: 1, expiresAt: null }
-  }
-}
-
 export const useStore = create((set) => ({
   // GPS
   gpsPosition:   null,
@@ -43,9 +33,6 @@ export const useStore = create((set) => ({
   notifyTelegram: lsBool('heli_notify_telegram', true),
   markerColor: localStorage.getItem('heli_marker_color') ?? '#1d4ed8',
 
-  // 운항 지점 설정
-  flightPoints: loadWaypoints(),
-
   // ── Actions ──────────────────────────────────────────────
   setGpsPosition:   (pos)  => set({ gpsPosition: pos, gpsError: null, gpsSignalLost: false }),
   setGpsError:      (err)  => set({ gpsError: err }),
@@ -70,19 +57,6 @@ export const useStore = create((set) => ({
   setMarkerColor: (color) => {
     localStorage.setItem('heli_marker_color', color)
     set({ markerColor: color })
-  },
-
-  setFlightPoints: (points) => {
-    const expiresAt = Date.now() + 24 * 60 * 60 * 1000
-    const data = { ...points, expiresAt }
-    localStorage.setItem('heli_waypoints', JSON.stringify(data))
-    set({ flightPoints: data })
-  },
-
-  clearFlightPoints: () => {
-    const empty = { takeoff: null, waypoints: [], landing: null, radiusKm: 1, expiresAt: null }
-    localStorage.removeItem('heli_waypoints')
-    set({ flightPoints: empty })
   },
 
   addEvent: (event) =>

@@ -26,22 +26,3 @@ export function findNearestZone(lat, lon, zones, radiusKm = 5) {
   }
   return nearest
 }
-
-// 운항 지점 반경 체크 — 등록된 지점이 없으면 true(통과)
-export function isNearFlightPoint(lat, lon, flightPoints) {
-  if (!flightPoints) return true
-
-  // 24시간 만료 체크
-  if (flightPoints.expiresAt && Date.now() > flightPoints.expiresAt) return true
-
-  const { takeoff, waypoints = [], landing, radiusKm = 1 } = flightPoints
-
-  // 등록된 지점이 하나도 없으면 통과
-  const allPoints = [takeoff, ...waypoints, landing].filter(Boolean)
-  if (allPoints.length === 0) return true
-
-  // 하나라도 반경 내에 있으면 통과
-  return allPoints.some(
-    (p) => distanceKm(lat, lon, p.lat, p.lon) <= radiusKm
-  )
-}

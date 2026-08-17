@@ -1,6 +1,6 @@
 import { saveEvent } from './firebaseService.js'
 import { sendTelegramMessage, buildTelegramMessage } from './telegramService.js'
-import { findNearestZone, isNearFlightPoint } from '../utils/geoUtils.js'
+import { findNearestZone } from '../utils/geoUtils.js'
 import { reverseGeocode } from '../utils/geocode.js'
 import { enqueue, flushQueue } from '../utils/offlineQueue.js'
 import { useStore } from '../store.js'
@@ -47,13 +47,7 @@ async function showBrowserNotification(event) {
 }
 
 async function dispatchEvent(eventData) {
-  const { notifyFCM, notifyTelegram, flightPoints } = useStore.getState()
-
-  // 운항 지점 반경 체크
-  if (!isNearFlightPoint(eventData.lat, eventData.lon, flightPoints)) {
-    console.log('[Notify] 운항 지점 반경 외 — 이벤트 무시:', eventData.type)
-    return
-  }
+  const { notifyFCM, notifyTelegram } = useStore.getState()
 
   const zone = findNearestZone(eventData.lat, eventData.lon, LANDING_ZONES)
   const placeName = await reverseGeocode(eventData.lat, eventData.lon)
