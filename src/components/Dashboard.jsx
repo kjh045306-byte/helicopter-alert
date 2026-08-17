@@ -84,6 +84,19 @@ export default function Dashboard() {
             <p className="text-xs text-slate-500">HeliAlert v1.1</p>
           </div>
         </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="p-2 rounded-full text-slate-400 hover:text-slate-200 hover:bg-slate-800 active:scale-90 transition-all"
+          style={{ touchAction: 'manipulation' }}
+          aria-label="새로고침"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+            <path d="M3 21v-5h5" />
+          </svg>
+        </button>
       </header>
 
       <GpsDebugBar />
