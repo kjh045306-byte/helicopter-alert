@@ -2,7 +2,7 @@
 //  Service Worker — PWA 앱 셸 캐싱 + FCM 백그라운드 메시지
 // ============================================================
 
-const CACHE_NAME = 'heli-alert-v2'
+const CACHE_NAME = 'heli-alert-v3'
 const SHELL_URLS = ['/', '/index.html', '/helicopter.svg', '/manifest.json']
 
 self.addEventListener('install', (e) => {
@@ -35,7 +35,15 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(fetch(e.request).catch(() => caches.match('/index.html')))
     return
   }
-  e.respondWith(caches.match(e.request).then((c) => c || fetch(e.request)))
+  e.respondWith(
+    fetch(e.request)
+      .then((res) => {
+        const resClone = res.clone()
+        caches.open(CACHE_NAME).then((cache) => cache.put(e.request, resClone))
+        return res
+      })
+      .catch(() => caches.match(e.request))
+  )
 })
 
 // ── FCM 백그라운드 메시지 ─────────────────────────────────────
