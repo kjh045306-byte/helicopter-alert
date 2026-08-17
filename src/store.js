@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { FlightState } from './services/stateMachine.js'
+import { getRoleByEmail } from './services/firebaseService.js'
 
 function lsBool(key, defaultVal) {
   const v = localStorage.getItem(key)
@@ -31,8 +32,11 @@ export const useStore = create((set) => ({
   eventLog: [],
 
   // UI
-  role: localStorage.getItem('heli_role') ?? 'pilot',
+  currentUser: null,
+  role: localStorage.getItem('heli_role') ?? 'crew',
   offlineCount: 0,
+  myUid:            null,
+  activeGpsSession: null,
 
   // 알림 토글
   notifyFCM:      lsBool('heli_notify_fcm',     true),
@@ -96,4 +100,17 @@ export const useStore = create((set) => ({
 
   setOfflineCount: (n) => set({ offlineCount: n }),
   setEventLog:     (log) => set({ eventLog: log }),
+  setMyUid:            (uid)     => set({ myUid: uid }),
+  setActiveGpsSession: (session) => set({ activeGpsSession: session }),
+
+  setCurrentUser: (fbUser) => {
+    if (fbUser) {
+      const role = getRoleByEmail(fbUser.email)
+      localStorage.setItem('heli_role', role)
+      set({ currentUser: { uid: fbUser.uid, email: fbUser.email }, role })
+    } else {
+      localStorage.removeItem('heli_role')
+      set({ currentUser: null, role: 'crew' })
+    }
+  },
 }))

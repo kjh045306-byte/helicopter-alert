@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  html, body {
+    overscroll-behavior-x: none;
+    touch-action: pan-y;
+  }
+
   body {
     @apply bg-slate-950 text-slate-100 font-sans;
     -webkit-tap-highlight-color: transparent;

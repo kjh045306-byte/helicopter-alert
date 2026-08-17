@@ -18,10 +18,12 @@ function useGoogleMaps() {
 }
 
 export default function TrackingMap() {
-  const mapRef      = useRef(null)
-  const googleRef   = useRef(null)
-  const markerRef   = useRef(null)
-  const polylineRef = useRef(null)
+  const mapRef          = useRef(null)
+  const googleRef       = useRef(null)
+  const markerRef       = useRef(null)
+  const polylineRef     = useRef(null)
+  const prevPositionRef = useRef(null)
+  const facingRightRef  = useRef(true)
   const googleReady = useGoogleMaps()
 
   const markerColor = useStore((s) => s.markerColor)
@@ -40,14 +42,22 @@ export default function TrackingMap() {
     return () => { unsubPos(); unsubPath() }
   }, [])
 
+  if (position && prevPositionRef.current) {
+    const dLon = position.lon - prevPositionRef.current.lon
+    if (Math.abs(dLon) > 0.00001) {
+      facingRightRef.current = dLon > 0
+    }
+  }
+
+  const facingRight = facingRightRef.current
   const heliIcon = googleReady ? {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-      <circle cx="24" cy="24" r="22" fill="${markerColor}" stroke="${markerColor}" stroke-width="2"/>
-      <circle cx="24" cy="24" r="14" fill="#ffffff"/>
-      <text x="24" y="32" text-anchor="middle" font-size="20">🚁</text>
-    </svg>
-  `),
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+        <circle cx="24" cy="24" r="22" fill="${markerColor}" stroke="${markerColor}" stroke-width="2"/>
+        <circle cx="24" cy="24" r="14" fill="#ffffff"/>
+        <text x="24" y="32" text-anchor="middle" font-size="20" transform="${facingRight ? '' : 'scale(-1,1) translate(-48,0)'}">🚁</text>
+      </svg>
+    `),
     scaledSize: new window.google.maps.Size(29, 29),
     anchor:     new window.google.maps.Point(14, 14),
   } : null
@@ -69,6 +79,7 @@ export default function TrackingMap() {
         { featureType: 'transit',        elementType: 'all',    stylers: [{ visibility: 'off' }] },
         { featureType: 'road',           elementType: 'labels', stylers: [{ visibility: 'on'  }] },
         { featureType: 'administrative', elementType: 'labels', stylers: [{ visibility: 'on'  }] },
+        { featureType: 'water', elementType: 'labels', stylers: [{ visibility: 'off' }] },
       ],
     })
 
@@ -95,6 +106,7 @@ export default function TrackingMap() {
   useEffect(() => {
     if (!googleRef.current || !markerRef.current || !position) return
     const latlng = { lat: position.lat, lng: position.lon }
+    prevPositionRef.current = position
     markerRef.current.setPosition(latlng)
     markerRef.current.setVisible(true)
     markerRef.current.setIcon(heliIcon)

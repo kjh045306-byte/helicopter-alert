@@ -46,7 +46,7 @@ export function useGPS() {
     }
     rafRef.current = requestAnimationFrame(animLoop)
 
-    function handleVisibility() {
+    async function handleVisibility() {
       if (document.visibilityState !== 'visible' || !isActiveRef.current) return
       gpsService.stop()
       gpsService.start()
@@ -54,6 +54,10 @@ export function useGPS() {
         setGpsSignalLost(true)
         setGpsError('GPS 신호 끊김')
         flightMachine.notifyGpsLost()
+      }
+      // Wake Lock 재요청 (백그라운드 복귀 시 자동 해제되므로)
+      if (!wakeLockRef.current) {
+        await requestWakeLock(wakeLockRef)
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
@@ -65,6 +69,18 @@ export function useGPS() {
       document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [setGpsPosition, setGpsError, setGpsActive, setGpsSignalLost])
+
+  async function requestWakeLock(wakeLockRef) {
+    if (!('wakeLock' in navigator)) return
+    try {
+      wakeLockRef.current = await navigator.wakeLock.request('screen')
+      wakeLockRef.current.addEventListener('release', () => {
+        wakeLockRef.current = null
+      })
+    } catch (e) {
+      console.warn('[WakeLock] 획득 실패:', e.message)
+    }
+  }
 
   async function startGPS() {
     const ok = gpsService.start()
@@ -87,13 +103,7 @@ export function useGPS() {
       }
     }, TRACKING_INTERVAL_MS)
 
-    if ('wakeLock' in navigator) {
-      try {
-        wakeLockRef.current = await navigator.wakeLock.request('screen')
-      } catch (e) {
-        console.warn('[WakeLock] 획득 실패:', e.message)
-      }
-    }
+    await requestWakeLock(wakeLockRef)
   }
 
   function stopGPS() {

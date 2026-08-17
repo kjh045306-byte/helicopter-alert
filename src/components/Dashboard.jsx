@@ -8,6 +8,12 @@ import TrackingMap from './TrackingMap.jsx'
 import GpsDebugBar from './GpsDebugBar.jsx'
 import { reverseGeocode } from '../utils/geocode.js'
 import { sendTelegramMessage, buildLocationMessage } from '../services/telegramService.js'
+import {
+  setGpsSession,
+  clearGpsSession,
+  subscribeGpsSession,
+  refreshGpsSession,
+} from '../services/firebaseService.js'
 
 const TABS = [
   { id: 'status', label: '상태',    icon: '📡' },
@@ -17,12 +23,56 @@ const TABS = [
 ]
 
 export default function Dashboard() {
-  const [tab, setTab]    = useState('status')
-  const gpsActive        = useStore((s) => s.gpsActive)
-  const role             = useStore((s) => s.role)
+  const [tab, setTab]       = useState('status')
+  const gpsActive           = useStore((s) => s.gpsActive)
+  const role                = useStore((s) => s.role)
+  const myUid               = useStore((s) => s.myUid)
+  const activeGpsSession    = useStore((s) => s.activeGpsSession)
+  const setActiveGpsSession = useStore((s) => s.setActiveGpsSession)
   const { startGPS, stopGPS } = useGPS()
 
   const isPilot = role === 'pilot'
+
+  useEffect(() => {
+    const unsub = subscribeGpsSession((session) => setActiveGpsSession(session))
+    return () => unsub()
+  }, [setActiveGpsSession])
+
+  useEffect(() => {
+    if (!isPilot || !myUid || gpsActive) return
+    // 내가 이전에 켜둔 세션이 아직 살아있으면 (2분 이내 하트비트) 자동으로 GPS 재개
+    if (activeGpsSession?.uid === myUid && activeGpsSession?.active) {
+      handleStartGPS()
+    }
+  }, [activeGpsSession, myUid, isPilot, gpsActive])
+
+  useEffect(() => {
+    if (!gpsActive || !myUid) return
+    const interval = setInterval(() => {
+      refreshGpsSession(myUid).catch(console.error)
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [gpsActive, myUid])
+
+  const otherUserActive =
+    activeGpsSession?.active === true &&
+    activeGpsSession?.uid !== myUid &&
+    activeGpsSession?.lastActiveAt &&
+    (Date.now() - activeGpsSession.lastActiveAt.toMillis()) < 2 * 60 * 1000
+
+  async function handleStartGPS() {
+    await startGPS()
+    if (myUid) {
+      await setGpsSession(myUid, activeGpsSession?.email ?? myUid).catch(console.error)
+    }
+  }
+
+  async function handleStopGPS() {
+    await stopGPS()
+    if (myUid) {
+      await clearGpsSession(myUid).catch(console.error)
+    }
+  }
 
   return (
     <div className="flex flex-col min-h-dvh max-w-md mx-auto">
@@ -36,8 +86,15 @@ export default function Dashboard() {
         </div>
         {isPilot && (
           <button
-            onClick={gpsActive ? stopGPS : startGPS}
-            className={gpsActive ? 'btn-danger text-sm py-1.5 px-3' : 'btn-primary text-sm py-1.5 px-3'}
+            onClick={gpsActive ? handleStopGPS : handleStartGPS}
+            disabled={!gpsActive && otherUserActive}
+            className={
+              gpsActive
+                ? 'btn-danger text-sm py-1.5 px-3'
+                : otherUserActive
+                  ? 'text-sm py-1.5 px-3 rounded-xl bg-slate-700 text-slate-500 cursor-not-allowed opacity-60'
+                  : 'btn-primary text-sm py-1.5 px-3'
+            }
           >
             {gpsActive ? '감지 중지' : 'GPS 시작'}
           </button>
@@ -45,6 +102,19 @@ export default function Dashboard() {
       </header>
 
       <GpsDebugBar />
+
+      {isPilot && otherUserActive && (
+        <div className="bg-amber-900/50 border-b border-amber-700/50 text-amber-300 text-xs px-4 py-2 flex items-center gap-2">
+          <span>🔒</span>
+          <span>
+            {activeGpsSession.email
+              ? `${activeGpsSession.email} 이(가) GPS 감지 중`
+              : '다른 조종사가 GPS 감지 중'
+            } — 중복 사용 불가
+          </span>
+        </div>
+      )}
+
       <OfflineBanner />
 
       <nav className="bg-slate-900 border-b border-slate-800 flex">
@@ -70,16 +140,29 @@ export default function Dashboard() {
             {isPilot && !gpsActive && (
               <div className="card text-center py-6">
                 <div className="text-4xl mb-3">📡</div>
-                <p className="text-slate-400 text-sm mb-4">
-                  GPS 감지를 시작하면 이착륙을 자동으로 감지합니다
-                </p>
-                <button onClick={startGPS} className="btn-primary">
-                  GPS 감지 시작
-                </button>
+                {otherUserActive ? (
+                  <>
+                    <p className="text-amber-400 text-sm font-semibold mb-1">
+                      🔒 GPS 감지 사용 중
+                    </p>
+                    <p className="text-slate-500 text-xs">
+                      {activeGpsSession.email ?? '다른 조종사'}이(가) 감지 중입니다
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-slate-400 text-sm mb-4">
+                      GPS 감지를 시작하면 이착륙을 자동으로 감지합니다
+                    </p>
+                    <button onClick={handleStartGPS} className="btn-primary">
+                      GPS 감지 시작
+                    </button>
+                  </>
+                )}
               </div>
             )}
             {isPilot && gpsActive && <LocationCheckCard />}
-            {isPilot && gpsActive && <StopGpsCard onStop={stopGPS} />}
+            {isPilot && gpsActive && <StopGpsCard onStop={handleStopGPS} />}
           </>
         )}
         {tab === 'map'    && <TrackingMap />}

@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { useStore } from '../store.js'
+import { signOutUser, changePassword } from '../services/firebaseService.js'
 
 const MARKER_COLORS = ['#FF7A00', '#FFD400', '#1d4ed8', '#38BDF8']
-import { sendTelegramMessage, buildTelegramMessage } from '../services/telegramService.js'
-import { reverseGeocode } from '../utils/geocode.js'
 import { getQueue } from '../utils/offlineQueue.js'
 import WaypointMap from './WaypointMap.jsx'
 
@@ -68,10 +67,41 @@ export default function NotificationPanel() {
   const markerColor       = useStore((s) => s.markerColor)
   const setMarkerColor    = useStore((s) => s.setMarkerColor)
 
-  const [testState, setTestState] = useState(null)
+  const currentUser = useStore((s) => s.currentUser)
   const [mapTarget, setMapTarget] = useState(null)
   const [radiusKm,  setRadiusKm]  = useState(flightPoints.radiusKm ?? 1)
+  const [showPwModal, setShowPwModal] = useState(false)
+  const [currentPw, setCurrentPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [pwError, setPwError] = useState('')
+  const [pwLoading, setPwLoading] = useState(false)
   const offlineQ = getQueue()
+
+  async function handleLogout() {
+    if (!confirm('로그아웃 하시겠습니까?')) return
+    await signOutUser()
+  }
+
+  async function handleChangePassword() {
+    setPwError('')
+    if (newPw.length < 6) return setPwError('비밀번호는 6자 이상이어야 합니다.')
+    if (newPw !== confirmPw) return setPwError('새 비밀번호가 일치하지 않습니다.')
+    setPwLoading(true)
+    try {
+      await changePassword(currentPw, newPw)
+      alert('비밀번호가 변경되었습니다.')
+      setShowPwModal(false)
+      setCurrentPw(''); setNewPw(''); setConfirmPw('')
+    } catch (err) {
+      const msg = err.code === 'auth/wrong-password'
+        ? '현재 비밀번호가 올바르지 않습니다.'
+        : '비밀번호 변경에 실패했습니다.'
+      setPwError(msg)
+    } finally {
+      setPwLoading(false)
+    }
+  }
 
   function handleMapConfirm(pos) {
     const updated = { ...flightPoints }
@@ -121,31 +151,6 @@ export default function NotificationPanel() {
   const hasAnyPoint = flightPoints.takeoff ||
     flightPoints.landing ||
     (flightPoints.waypoints ?? []).some(Boolean)
-
-  async function handleTest(type) {
-    if (testState === 'sending') return
-    setTestState('sending')
-    const LAT = 37.388, LON = 127.071
-    const placeName = await reverseGeocode(LAT, LON).catch(() => `위도 ${LAT} 경도 ${LON}`)
-    const mockEvent = {
-      type,
-      timestamp:     Date.now(),
-      speedKmh:      type === 'takeoff' ? 49.2 : 3.1,
-      lat:           LAT,
-      lon:           LON,
-      accuracy:      8,
-      landingZone:   null,
-      placeName,
-      flightMinutes: type === 'landing' ? 23 : null,
-    }
-    let anyOk = false
-    if (notifyTelegram) {
-      const ok = await sendTelegramMessage(buildTelegramMessage(mockEvent))
-      if (ok) anyOk = true
-    }
-    setTestState(anyOk ? 'done' : 'fail')
-    setTimeout(() => setTestState(null), 2500)
-  }
 
   return (
     <div className="space-y-4">
@@ -254,36 +259,6 @@ export default function NotificationPanel() {
         <Toggle label="텔레그램 알림" on={notifyTelegram} onChange={setNotifyTelegram} />
       </div>
 
-      {/* 알림 테스트 */}
-      <div className="card space-y-3">
-        <h3 className="text-sm font-semibold text-slate-400">알림 테스트</h3>
-        {!notifyTelegram ? (
-          <p className="text-xs text-slate-500 text-center py-1">활성화된 알림 채널이 없습니다</p>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handleTest('takeoff')}
-                disabled={testState === 'sending'}
-                className="btn-primary text-sm py-2 disabled:opacity-50"
-              >
-                🚁 이륙 테스트
-              </button>
-              <button
-                onClick={() => handleTest('landing')}
-                disabled={testState === 'sending'}
-                className="btn-primary text-sm py-2 disabled:opacity-50"
-              >
-                🛬 착륙 테스트
-              </button>
-            </div>
-            {testState === 'sending' && <p className="text-xs text-slate-400 text-center">발송 중...</p>}
-            {testState === 'done'    && <p className="text-xs text-green-400 text-center">✓ 테스트 발송 완료</p>}
-            {testState === 'fail'    && <p className="text-xs text-red-400 text-center">발송 실패 — 설정값을 확인하세요</p>}
-          </>
-        )}
-      </div>
-
       {offlineQ.length > 0 && (
         <div className="card border-amber-700 bg-amber-900/20">
           <div className="flex items-center gap-2 text-amber-400">
@@ -313,6 +288,58 @@ export default function NotificationPanel() {
           onConfirm={handleMapConfirm}
           onClose={() => setMapTarget(null)}
         />
+      )}
+
+      <div className="card space-y-3">
+        <h3 className="text-sm font-semibold text-slate-400">계정</h3>
+        <p className="text-xs text-slate-500">{currentUser?.email}</p>
+        <button
+          onClick={() => setShowPwModal(true)}
+          className="w-full py-2 text-sm rounded-xl bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+        >
+          🔑 비밀번호 변경
+        </button>
+        <button
+          onClick={handleLogout}
+          className="w-full py-2 text-sm rounded-xl bg-red-950/60 text-red-400 border border-red-900 hover:bg-red-900/60 transition-colors"
+        >
+          🚪 로그아웃
+        </button>
+      </div>
+
+      {showPwModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-2xl p-5 w-full max-w-sm space-y-3">
+            <h3 className="text-sm font-semibold text-slate-200">비밀번호 변경</h3>
+            <input
+              type="password" placeholder="현재 비밀번호" value={currentPw}
+              onChange={(e) => setCurrentPw(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm text-slate-200"
+            />
+            <input
+              type="password" placeholder="새 비밀번호 (6자 이상)" value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm text-slate-200"
+            />
+            <input
+              type="password" placeholder="새 비밀번호 확인" value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm text-slate-200"
+            />
+            {pwError && <p className="text-xs text-red-400">{pwError}</p>}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowPwModal(false)}
+                className="flex-1 py-2 text-sm rounded-lg bg-slate-700 text-slate-300"
+              >취소</button>
+              <button
+                onClick={handleChangePassword}
+                disabled={pwLoading}
+                className="flex-1 py-2 text-sm rounded-lg bg-blue-700 text-white disabled:opacity-50"
+              >{pwLoading ? '변경 중...' : '변경'}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
