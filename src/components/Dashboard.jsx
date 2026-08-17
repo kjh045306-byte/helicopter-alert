@@ -6,8 +6,6 @@ import EventLog from './EventLog.jsx'
 import NotificationPanel from './NotificationPanel.jsx'
 import TrackingMap from './TrackingMap.jsx'
 import GpsDebugBar from './GpsDebugBar.jsx'
-import { reverseGeocode } from '../utils/geocode.js'
-import { sendTelegramMessage, buildLocationMessage } from '../services/telegramService.js'
 import {
   setGpsSession,
   clearGpsSession,
@@ -40,7 +38,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!isPilot || !myUid || gpsActive) return
-    // 내가 이전에 켜둔 세션이 아직 살아있으면 (2분 이내 하트비트) 자동으로 GPS 재개
     if (activeGpsSession?.uid === myUid && activeGpsSession?.active) {
       handleStartGPS()
     }
@@ -76,7 +73,10 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col min-h-dvh max-w-md mx-auto">
-      <header className="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+      <header
+        className="bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between"
+        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingBottom: '0.75rem' }}
+      >
         <div className="flex items-center gap-2">
           <span className="text-2xl">🚁</span>
           <div>
@@ -84,21 +84,6 @@ export default function Dashboard() {
             <p className="text-xs text-slate-500">HeliAlert v1.1</p>
           </div>
         </div>
-        {isPilot && (
-          <button
-            onClick={gpsActive ? handleStopGPS : handleStartGPS}
-            disabled={!gpsActive && otherUserActive}
-            className={
-              gpsActive
-                ? 'btn-danger text-sm py-1.5 px-3'
-                : otherUserActive
-                  ? 'text-sm py-1.5 px-3 rounded-xl bg-slate-700 text-slate-500 cursor-not-allowed opacity-60'
-                  : 'btn-primary text-sm py-1.5 px-3'
-            }
-          >
-            {gpsActive ? '감지 중지' : 'GPS 시작'}
-          </button>
-        )}
       </header>
 
       <GpsDebugBar />
@@ -117,23 +102,7 @@ export default function Dashboard() {
 
       <OfflineBanner />
 
-      <nav className="bg-slate-900 border-b border-slate-800 flex">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 py-2.5 text-xs font-semibold flex flex-col items-center gap-0.5 transition-colors
-              ${tab === t.id
-                ? 'text-blue-400 border-b-2 border-blue-500'
-                : 'text-slate-500 hover:text-slate-300'}`}
-          >
-            <span>{t.icon}</span>
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </nav>
-
-      <main className="flex-1 overflow-y-auto p-4 space-y-4 pb-8">
+      <main className="flex-1 overflow-y-auto p-4 space-y-4 pb-4">
         {tab === 'status' && (
           <>
             <FlightStatus />
@@ -161,7 +130,6 @@ export default function Dashboard() {
                 )}
               </div>
             )}
-            {isPilot && gpsActive && <LocationCheckCard />}
             {isPilot && gpsActive && <StopGpsCard onStop={handleStopGPS} />}
           </>
         )}
@@ -169,65 +137,26 @@ export default function Dashboard() {
         {tab === 'log'    && <EventLog />}
         {tab === 'notify' && <NotificationPanel />}
       </main>
-    </div>
-  )
-}
 
-function LocationCheckCard() {
-  const gpsPosition    = useStore((s) => s.gpsPosition)
-  const gpsSignalLost  = useStore((s) => s.gpsSignalLost)
-  const notifyTelegram = useStore((s) => s.notifyTelegram)
-  const [state, setState] = useState(null)
-
-  const canSend = !!gpsPosition && !gpsSignalLost
-
-  async function handleLocationCheck() {
-    if (state === 'sending' || !canSend) return
-    setState('sending')
-    try {
-      const placeName = await reverseGeocode(gpsPosition.lat, gpsPosition.lon)
-        .catch(() => `위도 ${gpsPosition.lat.toFixed(4)} 경도 ${gpsPosition.lon.toFixed(4)}`)
-      const event = {
-        timestamp: Date.now(),
-        lat:       gpsPosition.lat,
-        lon:       gpsPosition.lon,
-        placeName,
-      }
-      let ok = false
-      if (notifyTelegram) {
-        ok = await sendTelegramMessage(buildLocationMessage(event))
-      }
-      setState(ok ? 'done' : 'fail')
-    } catch (e) {
-      console.error('[LocationCheck]', e)
-      setState('fail')
-    }
-    setTimeout(() => setState(null), 2500)
-  }
-
-  return (
-    <div className="card space-y-2">
-      <button
-        onClick={handleLocationCheck}
-        disabled={!canSend || state === 'sending'}
-        className={`w-full py-3 rounded-xl text-sm font-semibold border transition-colors flex items-center justify-center gap-2
-          ${canSend
-            ? 'bg-blue-700/40 text-blue-300 border-blue-700 hover:bg-blue-700/60'
-            : 'bg-slate-800 text-slate-600 border-slate-700 cursor-not-allowed'
-          } disabled:opacity-50`}
+      <nav
+        className="bg-slate-900 border-t border-slate-800 flex sticky bottom-0"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <span>📍</span>
-        위치 확인
-      </button>
-      {gpsSignalLost && (
-        <p className="text-xs text-red-400 text-center">GPS 신호 없음 — 신호 복구 후 사용 가능</p>
-      )}
-      {!gpsSignalLost && !gpsPosition && (
-        <p className="text-xs text-slate-600 text-center">GPS 위치 수신 대기 중...</p>
-      )}
-      {state === 'sending' && <p className="text-xs text-slate-400 text-center">위치 정보 전송 중...</p>}
-      {state === 'done'    && <p className="text-xs text-green-400 text-center">✓ 위치 알림 발송 완료</p>}
-      {state === 'fail'    && <p className="text-xs text-red-400 text-center">발송 실패 — 통신 상태를 확인하세요</p>}
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex-1 py-3 text-xs font-semibold flex flex-col items-center gap-0.5 transition-colors
+              ${tab === t.id
+                ? 'text-blue-400 border-t-2 border-blue-500 -mt-px'
+                : 'text-slate-500 hover:text-slate-300'}`}
+            style={{ touchAction: 'manipulation' }}
+          >
+            <span className="text-base">{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }
@@ -242,6 +171,7 @@ function StopGpsCard({ onStop }) {
                    bg-red-950/60 text-red-400 border border-red-900
                    hover:bg-red-900/60 transition-colors
                    flex items-center justify-center gap-2"
+        style={{ touchAction: 'manipulation' }}
       >
         <span>⏹</span>
         감지 중지
