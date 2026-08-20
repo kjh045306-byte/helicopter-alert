@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store.js'
 import { subscribePosition, subscribePath } from '../services/firebaseService.js'
 
-const GOOGLE_MAPS_KEY = 'AIzaSyAi9KTkybz2bDXoZbbHWHzMpzylOL6N_dg'
+const GOOGLE_MAPS_KEY = 'AIzaSyDUZbBFwxDGhv0eJG0r2rnweKhfX_xerPk'
 
 function useGoogleMaps() {
   const [ready, setReady] = useState(false)
