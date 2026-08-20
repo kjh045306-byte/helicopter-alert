@@ -4,20 +4,23 @@
 //    안정화 대기    : 3 s
 //    GPS 만료 기준  : 10 s
 //    GPS 정확도 한계: 100 m
+//    정확도 미달 시 강제 진행: 15 s
 // ============================================================
 
 const GPS_STABILIZE_MS  = 3_000
 const GPS_MAX_AGE_MS    = 10_000
 const GPS_MAX_ACCURACY  = 100      // metres
+const GPS_FALLBACK_MS   = 15_000   // 정확도 기준 미달이어도 이 시간 넘으면 강제 진행
 
 export class GPSService {
-  #watchId       = null
-  #listeners     = new Set()
-  #lastPosition  = null
+  #watchId        = null
+  #listeners      = new Set()
+  #lastPosition   = null
   #stabilizeTimer = null
-  #isStabilized  = false
+  #isStabilized   = false
+  #startTime      = null
+  #bestFallback   = null
 
-  // 구독 — callback(position | null)
   subscribe(cb) {
     this.#listeners.add(cb)
     return () => this.#listeners.delete(cb)
@@ -29,6 +32,8 @@ export class GPSService {
       return false
     }
     if (this.#watchId !== null) return true
+
+    this.#startTime = Date.now()
 
     this.#watchId = navigator.geolocation.watchPosition(
       (pos) => this.#handlePosition(pos),
@@ -48,8 +53,11 @@ export class GPSService {
       this.#watchId = null
     }
     clearTimeout(this.#stabilizeTimer)
-    this.#isStabilized = false
-    this.#lastPosition = null
+    this.#stabilizeTimer = null
+    this.#isStabilized   = false
+    this.#lastPosition   = null
+    this.#startTime      = null
+    this.#bestFallback   = null
   }
 
   get lastPosition() {
@@ -61,24 +69,41 @@ export class GPSService {
     const { latitude, longitude, accuracy, speed } = pos.coords
     const ageMs = Date.now() - pos.timestamp
 
-    if (accuracy > GPS_MAX_ACCURACY) return   // 정확도 기준 미달
-    if (ageMs > GPS_MAX_AGE_MS)      return   // 오래된 좌표
+    if (ageMs > GPS_MAX_AGE_MS) return   // 오래된 좌표
 
     const normalized = {
       lat:       latitude,
       lon:       longitude,
       accuracy,
-      speedMs:   speed ?? 0,                  // m/s (null 이면 0)
+      speedMs:   speed ?? 0,
       speedKmh:  (speed ?? 0) * 3.6,
       timestamp: pos.timestamp,
       ageMs,
     }
 
+    if (accuracy > GPS_MAX_ACCURACY) {
+      // 정확도 기준 미달 — 그래도 폴백용으로 최선의 좌표는 보관
+      if (!this.#bestFallback || accuracy < this.#bestFallback.accuracy) {
+        this.#bestFallback = normalized
+      }
+      // 15초 넘게 기준 미달이 지속되면 폴백 좌표로 강제 진행 (무한 대기 방지)
+      if (
+        !this.#isStabilized &&
+        this.#startTime &&
+        Date.now() - this.#startTime >= GPS_FALLBACK_MS
+      ) {
+        this.#isStabilized = true
+        this.#lastPosition = this.#bestFallback
+        this.#emit(this.#bestFallback)
+      }
+      return
+    }
+
     if (!this.#isStabilized) {
-      // 첫 수신 후 안정화 대기
       if (!this.#stabilizeTimer) {
         this.#stabilizeTimer = setTimeout(() => {
           this.#isStabilized = true
+          this.#lastPosition = normalized
           this.#emit(normalized)
         }, GPS_STABILIZE_MS)
       }
