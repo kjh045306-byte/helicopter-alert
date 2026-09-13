@@ -53,45 +53,42 @@ export function getDeviceId() {
   return auth?.currentUser?.uid ?? null
 }
 
-function eventsCol(uid) {
-  return collection(db, 'users', uid, 'flight_events')
+function eventsCol() {
+  return collection(db, 'flight_events')
 }
 
 export async function saveEvent(eventData) {
-  const uid = auth?.currentUser?.uid
+  const uid   = auth?.currentUser?.uid
+  const email = auth?.currentUser?.email
   if (!db || !uid) throw new Error('Firestore 미초기화 또는 미인증')
   const expireAt = Timestamp.fromDate(
     new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
   )
-  return addDoc(eventsCol(uid), {
+  return addDoc(eventsCol(), {
     ...eventData,
     uid,
-    deviceId:  uid,
+    email,
     createdAt: serverTimestamp(),
     expireAt,
   })
 }
 
 export async function deleteExpiredEvents() {
-  const uid = auth?.currentUser?.uid
-  if (!db || !uid) return
+  if (!db || !auth?.currentUser) return
   const now  = Timestamp.now()
   const snap = await getDocs(
-    query(eventsCol(uid), where('expireAt', '<', now))
+    query(eventsCol(), where('expireAt', '<', now))
   )
   await Promise.all(
-    snap.docs.map((d) =>
-      deleteDoc(doc(db, 'users', uid, 'flight_events', d.id))
-    )
+    snap.docs.map((d) => deleteDoc(doc(db, 'flight_events', d.id)))
   )
   if (snap.size > 0) console.log(`[Cleanup] 만료 이벤트 ${snap.size}건 삭제`)
 }
 
 export function subscribeRecentEvents(callback, count = 50) {
-  const uid = auth?.currentUser?.uid
-  if (!db || !uid) return () => {}
+  if (!db || !auth?.currentUser) return () => {}
   const q = query(
-    eventsCol(uid),
+    eventsCol(),
     orderBy('createdAt', 'desc'),
     limit(count)
   )
