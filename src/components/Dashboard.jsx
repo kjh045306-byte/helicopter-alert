@@ -81,7 +81,7 @@ export default function Dashboard() {
           <span className="text-2xl">🚁</span>
           <div>
             <h1 className="font-bold text-sm leading-tight">헬리콥터 이착륙 알림</h1>
-            <p className="text-xs text-slate-500">HeliAlert v2.3.1</p>
+            <p className="text-xs text-slate-500">HeliAlert v2.3.0</p>
           </div>
         </div>
         <button

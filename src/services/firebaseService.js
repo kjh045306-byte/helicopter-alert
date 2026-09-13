@@ -62,7 +62,7 @@ export async function saveEvent(eventData) {
   const email = auth?.currentUser?.email
   if (!db || !uid) throw new Error('Firestore 미초기화 또는 미인증')
   const expireAt = Timestamp.fromDate(
-    new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
+    new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
   )
   return addDoc(eventsCol(), {
     ...eventData,
@@ -83,11 +83,6 @@ export async function deleteExpiredEvents() {
     snap.docs.map((d) => deleteDoc(doc(db, 'flight_events', d.id)))
   )
   if (snap.size > 0) console.log(`[Cleanup] 만료 이벤트 ${snap.size}건 삭제`)
-}
-
-export async function deleteEventById(docId) {
-  if (!db || !auth?.currentUser) return
-  await deleteDoc(doc(db, 'flight_events', docId))
 }
 
 export function subscribeRecentEvents(callback, count = 50) {
