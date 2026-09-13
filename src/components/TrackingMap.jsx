@@ -27,6 +27,23 @@ export default function TrackingMap() {
   const googleReady = useGoogleMaps()
 
   const markerColor = useStore((s) => s.markerColor)
+  const flightStartAt = useStore((s) => s.flightStartAt)
+  const [now, setNow] = useState(Date.now())
+
+  useEffect(() => {
+    if (!flightStartAt) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [flightStartAt])
+
+  function formatDuration(ms) {
+    const totalMin = Math.max(0, Math.floor(ms / 60000))
+    const h = String(Math.floor(totalMin / 60)).padStart(2, '0')
+    const m = String(totalMin % 60).padStart(2, '0')
+    return `${h}:${m}`
+  }
+
+  const elapsedMs = flightStartAt ? now - flightStartAt : 0
 
   const [position,    setPosition]    = useState(null)
   const [path,        setPath]        = useState([])
@@ -158,10 +175,19 @@ export default function TrackingMap() {
       />
 
       {/* 경로 정보 */}
-      {path.length > 0 && (
-        <div className="card py-2 px-3 flex items-center justify-between">
-          <span className="text-xs text-slate-500">경로 포인트</span>
-          <span className="text-xs text-slate-300 font-medium">{path.length}개</span>
+      {(flightStartAt || path.length > 0) && (
+        <div className="card py-2 px-3 flex items-center">
+          <div className="flex-1">
+            <p className="text-xs text-slate-500">비행시간</p>
+            <p className="text-sm text-blue-300 font-medium tabular-nums">
+              {formatDuration(elapsedMs)}
+            </p>
+          </div>
+          <div className="w-px h-8 bg-slate-700 mx-3" />
+          <div className="flex-1 text-right">
+            <p className="text-xs text-slate-500">경로 포인트</p>
+            <p className="text-sm text-slate-300 font-medium">{path.length}개</p>
+          </div>
         </div>
       )}
     </div>

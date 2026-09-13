@@ -7,10 +7,19 @@ export function useFlightState() {
   const setFlightState = useStore((s) => s.setFlightState)
   const addEvent       = useStore((s) => s.addEvent)
 
+  const setFlightStartAt = useStore((s) => s.setFlightStartAt)
+
   useEffect(() => {
     const unsub = flightMachine.subscribe((event) => {
       if (event.type === 'stateChange') {
         setFlightState(event.state)
+        if (event.state === FlightState.AIRBORNE) {
+          if (!useStore.getState().flightStartAt) {
+            setFlightStartAt(Date.now())
+          }
+        } else if (event.state === FlightState.IDLE) {
+          setFlightStartAt(null)
+        }
         return
       }
 

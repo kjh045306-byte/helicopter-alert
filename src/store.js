@@ -17,6 +17,7 @@ export const useStore = create((set) => ({
   // 상태 머신
   flightState:  FlightState.IDLE,
   holdProgress: 0,
+  flightStartAt: null,
 
   // 이벤트 로그
   eventLog: [],
@@ -40,6 +41,7 @@ export const useStore = create((set) => ({
   setGpsSignalLost: (v)    => set({ gpsSignalLost: v }),
   setFlightState:   (s)    => set({ flightState: s }),
   setHoldProgress:  (p)    => set({ holdProgress: p }),
+  setFlightStartAt: (t)    => set({ flightStartAt: t }),
 
   setRole: (role) => {
     localStorage.setItem('heli_role', role)
