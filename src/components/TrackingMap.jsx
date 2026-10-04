@@ -4,6 +4,14 @@ import { subscribePosition, subscribePath } from '../services/firebaseService.js
 
 const GOOGLE_MAPS_KEY = 'AIzaSyDUZbBFwxDGhv0eJG0r2rnweKhfX_xerPk'
 
+const KMH_TO_KTS = 0.539957
+
+// 예: 22.8 → "12KTS(23km/h)"
+function formatSpeed(kmh) {
+  const v = Number(kmh ?? 0)
+  return `${Math.round(v * KMH_TO_KTS)}KTS(${Math.round(v)}km/h)`
+}
+
 function useGoogleMaps() {
   const [ready, setReady] = useState(false)
   useEffect(() => {
@@ -156,7 +164,7 @@ export default function TrackingMap() {
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse inline-block" />
               <span className="text-sm text-blue-300 font-semibold">비행 중</span>
-              <span className="text-xs text-slate-500">{position.speedKmh?.toFixed(0)} km/h</span>
+              <span className="text-xs text-slate-400 tabular-nums">{formatSpeed(position.speedKmh)}</span>
             </div>
             <span className="text-xs text-slate-500">수신 {timeAgo()}</span>
           </div>
