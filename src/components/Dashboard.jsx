@@ -11,6 +11,8 @@ import {
   clearGpsSession,
   subscribeGpsSession,
   refreshGpsSession,
+  getGpsSessionFromServer,
+  GPS_SESSION_STALE_MS,
 } from '../services/firebaseService.js'
 
 const TABS = [
@@ -31,6 +33,7 @@ export default function Dashboard() {
   const { startGPS, stopGPS } = useGPS()
   const startingRef    = useRef(false)  // 시작 처리 중 중복 호출 방지
   const userStoppedRef = useRef(false)  // 사용자가 직접 중지했는지 (자동 재개 방지)
+  const [notice, setNotice] = useState('')
 
   // admin은 조종사 기능(GPS 감지)도 사용할 수 있다
   const isPilot = role === 'pilot' || role === 'admin'
@@ -40,13 +43,45 @@ export default function Dashboard() {
     return () => unsub()
   }, [setActiveGpsSession])
 
-  // 새로고침 후 내 잠금이 남아 있으면 GPS 감지를 자동 재개한다 (수동 중지한 경우 제외)
+  // 새로고침 후 내 잠금이 남아 있으면 GPS 감지를 자동 재개한다.
+  // 직접 중지/로그아웃/인수된 경우와, 하트비트가 끊긴 오래된 잠금은 재개하지 않는다.
   useEffect(() => {
     if (!isPilot || !myUid || gpsActive || userStoppedRef.current) return
-    if (activeGpsSession?.uid === myUid && activeGpsSession?.active) {
-      handleStartGPS()
-    }
+    if (activeGpsSession?.uid !== myUid || !activeGpsSession?.active) return
+    const last = activeGpsSession.lastActiveAt?.toMillis?.()
+    if (last != null && Date.now() - last >= GPS_SESSION_STALE_MS) return
+    handleStartGPS()
   }, [activeGpsSession, myUid, isPilot, gpsActive])
+
+  // 다른 조종사가 잠금을 인수하면 이 기기의 GPS 감지를 즉시 중지한다.
+  // 구독 스냅샷이 지연됐을 수 있으므로 서버에서 다시 읽어 소유자가 확실히 다를 때만 중지한다.
+  // (읽기 실패 시에는 중지하지 않는다)
+  useEffect(() => {
+    if (!gpsActive || !myUid) return
+    if (!activeGpsSession?.uid || activeGpsSession.uid === myUid) return
+    let cancelled = false
+    getGpsSessionFromServer()
+      .then((session) => {
+        if (cancelled || userStoppedRef.current) return
+        if (!session?.active || !session.uid || session.uid === myUid) return
+        userStoppedRef.current = true
+        stopGPS()
+        setNotice('다른 조종사가 GPS를 인수하여 중지되었습니다')
+      })
+      .catch((e) => console.warn('[GPS 잠금] 소유자 확인 실패:', e.message))
+    return () => { cancelled = true }
+  }, [gpsActive, myUid, activeGpsSession])
+
+  // 로그아웃 직전: GPS 중지 + 내 잠금 해제. 실패해도 로그아웃은 계속 진행한다.
+  async function handleBeforeLogout() {
+    userStoppedRef.current = true
+    try {
+      if (myUid) await clearGpsSession(myUid)
+    } catch (e) {
+      console.error(e)
+    }
+    stopGPS()
+  }
 
   useEffect(() => {
     if (!gpsActive || !myUid) return
@@ -109,7 +144,7 @@ export default function Dashboard() {
           <span className="text-2xl">🚁</span>
           <div>
             <h1 className="font-bold text-sm leading-tight">헬리콥터 이착륙 알림</h1>
-            <p className="text-xs text-slate-500">HeliAlert v3.0.1</p>
+            <p className="text-xs text-slate-500">HeliAlert v3.0.2</p>
           </div>
         </div>
         <button
@@ -128,6 +163,14 @@ export default function Dashboard() {
       </header>
 
       <GpsDebugBar />
+
+      {notice && (
+        <div className="bg-red-900/60 border-b border-red-700/50 text-red-200 text-xs px-4 py-2 flex items-center gap-2">
+          <span>⚠</span>
+          <span className="flex-1">{notice}</span>
+          <button onClick={() => setNotice('')} className="px-1" aria-label="닫기">✕</button>
+        </div>
+      )}
 
       {isPilot && otherUserActive && (
         <div className="bg-amber-900/50 border-b border-amber-700/50 text-amber-300 text-xs px-4 py-2 flex items-center gap-2">
@@ -176,7 +219,7 @@ export default function Dashboard() {
         )}
         {tab === 'map'    && <TrackingMap />}
         {tab === 'log'    && <EventLog />}
-        {tab === 'notify' && <NotificationPanel />}
+        {tab === 'notify' && <NotificationPanel onBeforeLogout={handleBeforeLogout} />}
       </main>
 
       <nav

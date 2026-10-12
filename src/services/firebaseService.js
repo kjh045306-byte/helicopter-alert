@@ -6,6 +6,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocFromServer,
   deleteDoc,
   getDocs,
   query,
@@ -221,6 +222,13 @@ export async function setGpsSession(uid, email) {
       lastActiveAt: serverTimestamp(),
     })
   })
+}
+
+// 서버에서 직접 잠금 문서를 읽는다 (캐시/지연된 스냅샷 방지). 읽기 실패 시 오류를 던진다.
+export async function getGpsSessionFromServer() {
+  if (!db) throw new Error('Firestore 미초기화')
+  const snap = await getDocFromServer(doc(db, 'heli_status', 'gps_session'))
+  return snap.exists() ? snap.data() : null
 }
 
 export async function refreshGpsSession(uid) {

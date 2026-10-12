@@ -24,7 +24,7 @@ function Toggle({ on, onChange, label }) {
   )
 }
 
-export default function NotificationPanel() {
+export default function NotificationPanel({ onBeforeLogout }) {
   const notifyTelegram    = useStore((s) => s.notifyTelegram)
   const setNotifyTelegram = useStore((s) => s.setNotifyTelegram)
   const markerColor       = useStore((s) => s.markerColor)
@@ -43,6 +43,11 @@ export default function NotificationPanel() {
 
   async function handleLogout() {
     if (!confirm('로그아웃 하시겠습니까?')) return
+    try {
+      await onBeforeLogout?.()
+    } catch (e) {
+      console.error(e)  // 정리 실패와 무관하게 로그아웃은 진행
+    }
     await signOutUser()
   }
 
