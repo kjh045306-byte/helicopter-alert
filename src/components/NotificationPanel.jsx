@@ -4,6 +4,7 @@ import { signOutUser, changePassword } from '../services/firebaseService.js'
 
 const MARKER_COLORS = ['#FF7A00', '#FFD400', '#1d4ed8', '#38BDF8']
 import { getQueue } from '../utils/offlineQueue.js'
+import AccountManager from './AccountManager.jsx'
 
 function Toggle({ on, onChange, label }) {
   return (
@@ -30,6 +31,8 @@ export default function NotificationPanel() {
   const setMarkerColor    = useStore((s) => s.setMarkerColor)
 
   const currentUser = useStore((s) => s.currentUser)
+  const role        = useStore((s) => s.role)
+  const [showAccounts, setShowAccounts] = useState(false)
   const [showPwModal, setShowPwModal] = useState(false)
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
@@ -108,6 +111,21 @@ export default function NotificationPanel() {
             </div>
           </div>
         </div>
+      )}
+
+      {role === 'admin' && (
+        <div className="card">
+          <button
+            onClick={() => setShowAccounts(true)}
+            className="w-full flex items-center justify-between text-sm font-semibold text-slate-300"
+          >
+            <span>👥 계정 관리</span>
+            <span className="text-slate-500">›</span>
+          </button>
+        </div>
+      )}
+      {showAccounts && role === 'admin' && (
+        <AccountManager onClose={() => setShowAccounts(false)} />
       )}
 
       <div className="card space-y-3">

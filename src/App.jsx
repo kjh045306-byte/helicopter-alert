@@ -7,6 +7,7 @@ import {
   onAuthStateChange,
   subscribeRecentEvents,
   deleteExpiredEvents,
+  resolveRole,
 } from './services/firebaseService.js'
 import { setupOfflineRecovery } from './services/notificationService.js'
 import { useStore } from './store.js'
@@ -27,10 +28,12 @@ export default function App() {
     let unsubEvents = () => {}
     let active = true
 
-    const unsubAuth = onAuthStateChange((fbUser) => {
+    const unsubAuth = onAuthStateChange(async (fbUser) => {
       if (!active) return
       if (fbUser) {
-        setCurrentUser(fbUser)
+        const role = await resolveRole(fbUser)
+        if (!active) return
+        setCurrentUser(fbUser, role)
         setUser(fbUser)
         deleteExpiredEvents().catch(console.error)
         unsubEvents = subscribeRecentEvents((events) => setEventLog(events))

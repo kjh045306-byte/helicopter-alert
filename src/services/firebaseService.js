@@ -232,14 +232,35 @@ export function subscribeGpsSession(callback) {
 
 // ── 인증 ──────────────────────────────────────────────────────
 
+const VALID_ROLES = ['admin', 'pilot', 'crew']
+
+// TODO: claims 전환 완료 후 제거 (PILOT_EMAILS / getRoleByEmail 폴백)
 const PILOT_EMAILS = new Set([
   'cds0440@sk.com',
   'jjk@sk.com',
   'juhwan_kim@sk.com',
 ])
 
+// TODO: claims 전환 완료 후 제거. 폴백은 admin을 반환하지 않는다.
 export function getRoleByEmail(email) {
   return PILOT_EMAILS.has(email?.toLowerCase()) ? 'pilot' : 'crew'
+}
+
+// 서버 claims의 role을 읽는다. 토큰을 강제 갱신해 역할 변경을 즉시 반영한다.
+// claims.role이 없거나 토큰 갱신에 실패하면 이메일 기반 폴백을 사용한다.
+export async function resolveRole(fbUser) {
+  try {
+    const result = await fbUser.getIdTokenResult(true)
+    const role = result.claims?.role
+    if (VALID_ROLES.includes(role)) return role
+  } catch (e) {
+    console.warn('[Auth] 토큰 갱신 실패, 폴백 역할 사용:', e.message)
+  }
+  return getRoleByEmail(fbUser.email)
+}
+
+export function getFirebaseApp() {
+  return app
 }
 
 export async function signInWithEmail(email, password) {

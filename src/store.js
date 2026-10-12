@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { FlightState } from './services/stateMachine.js'
-import { getRoleByEmail } from './services/firebaseService.js'
+
+const ROLES = ['admin', 'pilot', 'crew']
 
 function lsBool(key, defaultVal) {
   const v = localStorage.getItem(key)
@@ -24,7 +25,7 @@ export const useStore = create((set) => ({
 
   // UI
   currentUser: null,
-  role: localStorage.getItem('heli_role') ?? 'crew',
+  role: ROLES.includes(localStorage.getItem('heli_role')) ? localStorage.getItem('heli_role') : 'crew',
   offlineCount: 0,
   myUid:            null,
   activeGpsSession: null,
@@ -79,9 +80,9 @@ export const useStore = create((set) => ({
   setMyUid:            (uid)     => set({ myUid: uid }),
   setActiveGpsSession: (session) => set({ activeGpsSession: session }),
 
-  setCurrentUser: (fbUser) => {
+  // role은 호출 측에서 서버 claims로 확인한 값을 전달한다.
+  setCurrentUser: (fbUser, role = 'crew') => {
     if (fbUser) {
-      const role = getRoleByEmail(fbUser.email)
       localStorage.setItem('heli_role', role)
       set({ currentUser: { uid: fbUser.uid, email: fbUser.email }, role })
     } else {
