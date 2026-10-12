@@ -4,3 +4,8 @@ dist/
 .env.local
 .firebase/
 .claude/
+
+secrets/
+*serviceAccount*.json
+*-sa.json
+*firebase-adminsdk*.json
