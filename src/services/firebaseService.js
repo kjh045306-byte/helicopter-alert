@@ -13,6 +13,7 @@ import {
   limit,
   where,
   onSnapshot,
+  runTransaction,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore'
@@ -193,14 +194,32 @@ export function onForegroundMessage(callback) {
   return onMessage(messaging, callback)
 }
 
+// 다른 사용자의 하트비트가 이 시간 이내면 잠금이 유효한 것으로 본다
+export const GPS_SESSION_STALE_MS = 2 * 60 * 1000
+
+// 잠금 획득. 다른 사용자가 유효한 잠금을 가지고 있으면 'locked-by-other' 오류를 던진다.
+// 트랜잭션으로 처리해 동시에 시작을 눌러도 한 명만 획득한다.
 export async function setGpsSession(uid, email) {
   if (!db) return
-  await setDoc(doc(db, 'heli_status', 'gps_session'), {
-    uid,
-    email,
-    active:       true,
-    startedAt:    serverTimestamp(),
-    lastActiveAt: serverTimestamp(),
+  const ref = doc(db, 'heli_status', 'gps_session')
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    if (snap.exists()) {
+      const s = snap.data()
+      const last = s.lastActiveAt?.toMillis?.() ?? 0
+      if (s.active && s.uid !== uid && Date.now() - last < GPS_SESSION_STALE_MS) {
+        const err = new Error('다른 사용자가 GPS 감지 중입니다.')
+        err.code = 'locked-by-other'
+        throw err
+      }
+    }
+    tx.set(ref, {
+      uid,
+      email,
+      active:       true,
+      startedAt:    serverTimestamp(),
+      lastActiveAt: serverTimestamp(),
+    })
   })
 }
 

@@ -84,10 +84,11 @@ export const useStore = create((set) => ({
   setCurrentUser: (fbUser, role = 'crew') => {
     if (fbUser) {
       localStorage.setItem('heli_role', role)
-      set({ currentUser: { uid: fbUser.uid, email: fbUser.email }, role })
+      // myUid는 GPS 세션 잠금 소유자 판단에 사용한다
+      set({ currentUser: { uid: fbUser.uid, email: fbUser.email }, myUid: fbUser.uid, role })
     } else {
       localStorage.removeItem('heli_role')
-      set({ currentUser: null, role: 'crew' })
+      set({ currentUser: null, myUid: null, activeGpsSession: null, role: 'crew' })
     }
   },
 }))

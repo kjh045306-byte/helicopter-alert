@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store.js'
 import { useGPS } from '../hooks/useGPS.js'
 import FlightStatus from './FlightStatus.jsx'
@@ -27,7 +27,10 @@ export default function Dashboard() {
   const myUid               = useStore((s) => s.myUid)
   const activeGpsSession    = useStore((s) => s.activeGpsSession)
   const setActiveGpsSession = useStore((s) => s.setActiveGpsSession)
+  const currentUser         = useStore((s) => s.currentUser)
   const { startGPS, stopGPS } = useGPS()
+  const startingRef    = useRef(false)  // 시작 처리 중 중복 호출 방지
+  const userStoppedRef = useRef(false)  // 사용자가 직접 중지했는지 (자동 재개 방지)
 
   // admin은 조종사 기능(GPS 감지)도 사용할 수 있다
   const isPilot = role === 'pilot' || role === 'admin'
@@ -37,8 +40,9 @@ export default function Dashboard() {
     return () => unsub()
   }, [setActiveGpsSession])
 
+  // 새로고침 후 내 잠금이 남아 있으면 GPS 감지를 자동 재개한다 (수동 중지한 경우 제외)
   useEffect(() => {
-    if (!isPilot || !myUid || gpsActive) return
+    if (!isPilot || !myUid || gpsActive || userStoppedRef.current) return
     if (activeGpsSession?.uid === myUid && activeGpsSession?.active) {
       handleStartGPS()
     }
@@ -58,17 +62,40 @@ export default function Dashboard() {
     activeGpsSession?.lastActiveAt &&
     (Date.now() - activeGpsSession.lastActiveAt.toMillis()) < 2 * 60 * 1000
 
+  // 잠금을 먼저 획득한 뒤 GPS를 시작한다 (다른 사용자가 사용 중이면 시작하지 않음)
   async function handleStartGPS() {
-    await startGPS()
-    if (myUid) {
-      await setGpsSession(myUid, activeGpsSession?.email ?? myUid).catch(console.error)
+    if (startingRef.current) return
+    startingRef.current = true
+    try {
+      if (myUid) {
+        try {
+          await setGpsSession(myUid, currentUser?.email ?? myUid)
+        } catch (e) {
+          if (e.code === 'locked-by-other') {
+            alert('다른 사용자가 GPS 감지 중입니다.')
+            return
+          }
+          // 잠금 저장 실패(네트워크 등)는 감지 자체를 막지 않는다
+          console.error(e)
+        }
+      }
+      userStoppedRef.current = false
+      await startGPS()
+    } finally {
+      startingRef.current = false
     }
   }
 
+  // 잠금을 먼저 해제한 뒤 GPS를 중지한다.
+  // 순서가 반대면 gpsActive=false가 되는 순간 자동 재개 로직이 내 잠금을 보고 다시 시작한다.
   async function handleStopGPS() {
-    await stopGPS()
-    if (myUid) {
-      await clearGpsSession(myUid).catch(console.error)
+    userStoppedRef.current = true
+    try {
+      if (myUid) await clearGpsSession(myUid)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      await stopGPS()
     }
   }
 
@@ -82,7 +109,7 @@ export default function Dashboard() {
           <span className="text-2xl">🚁</span>
           <div>
             <h1 className="font-bold text-sm leading-tight">헬리콥터 이착륙 알림</h1>
-            <p className="text-xs text-slate-500">HeliAlert v3.0.0</p>
+            <p className="text-xs text-slate-500">HeliAlert v3.0.1</p>
           </div>
         </div>
         <button
